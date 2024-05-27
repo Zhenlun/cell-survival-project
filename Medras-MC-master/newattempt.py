@@ -43,22 +43,20 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 import os
+import math
 import numpy as np
 import scipy as sp
-import math
 from scipy.integrate import odeint
 from scipy.stats import poisson
 import sys
 import io
 from contextlib import redirect_stdout
 
+from concurrent.futures import ThreadPoolExecutor
 
 from repairanalysis import medrasrepair
 from repairanalysis import sddparser
 from itertools import groupby
-
-path = os.getcwd()
-#sddpath = path
 
 
 #print('Fidelity analysis')
@@ -125,12 +123,6 @@ individual break set field:
 
 '''
 
-
-
-
-
-
-
 defaultSurvParams= {'apoptoticRate': 0.01117, 'mitoticRate': 0.0141, 'baseRate': 0.000739} 
 defaultDNAParams = {'sigma': 0.04187, 'NHEJFidelity': 0.98537,'MMEJFidelity': 0.4393, 
     						'fastRepair': 2.081,'fastFociDelay': 8.079, 'slowRepair': 0.2604, 
@@ -139,12 +131,10 @@ defaultDNAParams = {'sigma': 0.04187, 'NHEJFidelity': 0.98537,'MMEJFidelity': 0.
     						'rNuc': 4.282 }
 defaultCell = {'dna':6100.0,'chromosomes':46,'repair':0,'G1Arrest':1,'phase':0,'gene':0}  
 
-
 add_index_aber = [9]
 #add_index_aber = [10, 11, 14, 15]
 add_index_post = [2, 3]
 add_index_pre = [1]
-
 
 plot_survival_rate = False
 plot_phase_rate = False
@@ -155,6 +145,19 @@ LET_value = 0
 dose_value = 2
 particle = 2112 #PDG code
 
+currentstdout = sys.__stdout__
+
+'''def run_simulation(sddpath):
+    # Misrepair spectrum analysis
+    sys.stdout = open("medras_spectrum_analysis.output", 'w')
+    medrasrepair.repairSimulation(sddpath, 'Spectrum')
+    sys.stdout.flush()
+    sys.stdout = sys.__stdout__
+    
+    with open("medras_spectrum_analysis.output", 'r') as spectrum_file:
+        repair_data = [line.split() for line in spectrum_file if line[0].isdigit()]
+    
+    return repair_data'''
 
 
 def run_simulation(sddp):
@@ -176,184 +179,102 @@ def run_simulation(sddp):
     
     return repair_data
 
-def g1_survival(aber, prebreak, postbreak):
-    """
-    Calculate G1 survival rate based on aberrations and breaks.
-    """
-    apoptotic_survival = np.exp(-postbreak * defaultSurvParams['apoptoticRate']) if functional_g1arrest else 1.0
-    aberration_survival = np.exp(-aber)
-    base_survival = np.exp(-prebreak * defaultSurvParams['baseRate'])
-    
-    return apoptotic_survival * aberration_survival * base_survival
-        
-    
-    
-def g2_survival(aber, postbreak):
-    """
-    Calculate G2 survival rate based on aberrations and post-repair breaks.
-    """
-    mitotic_break = min(postbreak, 20)
-    mitotic_survival = np.exp(-mitotic_break * defaultSurvParams['mitoticRate'])
-    aberration_survival = np.exp(-aber)
-    
-    return mitotic_survival * aberration_survival
-    
-    
-    
-def m_survival(aber, prebreak, postbreak):
-    """
-    Calculate M survival rate based on aberrations and breaks.
-    """
-    mitotic_break = postbreak
-    mitotic_survival = np.exp(-mitotic_break * defaultSurvParams['mitoticRate'])
-    g1_survival_rate = g1_survival(aber, prebreak, postbreak)
-    
-    return mitotic_survival * g1_survival_rate
 
 
+def record_viability(num_simulations, sddpath):
+    repair_data = run_simulation(sddpath)
+    #print(repair_data)
+    #print(len(repair_data))
+    viability_records = []
+    if len(repair_data) > 0:
+        # Run the simulation num_simulations/len(repair_data) times, rounded up
+        simulations_to_run = math.ceil(num_simulations / len(repair_data))
+        for _ in range(simulations_to_run):
+            repair_data = run_simulation(sddpath)
+            for data_set in repair_data:
+                # Check if the last element is "misrepair!", indicating a viability of 1
+                if data_set[-1] == "misrepair!":
+                    viability_records.append('1')
+                else:
+                    # Otherwise, record the actual last element as the viability
+                    viability_records.append(data_set[-1])
+    else:
+        return 'check folder!!!'
+    return np.array(viability_records, dtype=int)
 
-def process_spectrum(spectrum, phase):
-    return_rate = []
+def plot_histogram_and_calculate_survival_rate(viability_records):
+    # Define the bins such that 0 is always on the left
+    bins = [0, 1, 2]
     
-    for spec in spectrum:
-        # Assuming add_index_aber, add_index_post, and add_index_pre are defined elsewhere
-        aberration = sum(int(spec[i]) for i in add_index_aber if len(spec) > 7)
-        postbreak = sum(int(spec[i]) for i in add_index_post if len(spec) > 7)
-        prebreak = sum(int(spec[i]) for i in add_index_pre if len(spec) > 7)
-        
-        if phase == 1:
-            rate = g1_survival(aberration, prebreak, postbreak)
-        elif phase == 2:
-            rate = g2_survival(aberration, postbreak)
-        elif phase == 3:
-            rate = m_survival(aberration, prebreak, postbreak)
-        else:
-            raise ValueError("Please enter a valid phase!")
-        
-        return_rate.append(rate)
-    
-    return return_rate
-    
-        
-    
-def get_survival_rates(sddp):
-    spectrum = run_simulation(sddp)
-    
-    all_phase_rate = [process_spectrum(spectrum, phase) for phase in cell_phase]
-    return all_phase_rate
-
-
-
-
-def go_through_folder(subfolder):
-    sddpath = os.path.join(os.getcwd(), subfolder)
-    result = get_survival_rates(sddpath)
-    return result
-
-def plot_results(results):
-    def linq1(x):
-        a = 2.01 
-        b = 0.011
-        return np.exp(-a*x-b*x*x)
-
-    def linq2(x):
-        a = 0.5
-        b = 0.064
-        return np.exp(-a*x-b*x*x)
-
-    xax = np.linspace(0, 4)
-    plt.yscale("log")
-    plt.plot(xax, linq1(xax), label = "chaudhary14, AG01522 cells")
-    plt.plot(xax, linq2(xax), label = "chaudhary14, U-87 cells")
-    for i, result in enumerate(results):
-        plt.errorbar(0.094, result[0][0], yerr=result[0][1], fmt='r.')#, label=f"this work {i+1}")
-    plt.legend()
-    plt.title("Model Survival Rate In Comparison To PIDE Data")
-    plt.xlabel("Dose (Gy)")
-    plt.ylabel("Survival Rate")
+    # Plot a histogram of the viability records
+    plt.figure()
+    plt.hist(viability_records, bins=bins, align='left', rwidth=0.8, color='blue', alpha=0.7)
+    plt.title('Histogram of Viability Outcomes')
+    plt.xticks([0, 1])
+    plt.xlabel('Viability')
+    plt.ylabel('Frequency')
     plt.show()
     
-    
+    # Calculate the survival rate
+    survival_rate = np.count_nonzero(viability_records == 1) / len(viability_records)
+    return survival_rate
+
+def calculate_survival_rate(num_simulations, sddpath):
+    viability_results = record_viability(num_simulations, sddpath)
+    #print(len(viability_results))
+    survival_rate = plot_histogram_and_calculate_survival_rate(viability_results)
+    return survival_rate
+
+def calculate_statistics(number_of_trials, sddpath):
+    survival_rate = calculate_survival_rate(number_of_trials, sddpath)
+    n = number_of_trials
+    p = survival_rate
+    variance = p * (1 - p) / n
+    standard_deviation = np.sqrt(variance)
+    return survival_rate, variance, standard_deviation
+
 def all_equal(iterable):
     g = groupby(iterable)
     return next(g, True) and not next(g, False)
-    
+
+
+        
 if __name__ == "__main__":
-    sddpath = os.getcwd()
+    path = os.getcwd()
+    sddpath = path
+    folder_rate = []
+    folder_variance = []
+    folder_deviation = []
     repeats = 10000
-    
+
     for root, subfolders, files in os.walk(sddpath):
         for foldername in subfolders:
             if any(sub in foldername for sub in ['_inner_electron', '_inter_electron', '_outer_electron', 
                                      '_inner_proton', '_inter_proton', '_outer_proton', 
                                      '_inner_alpha', '_inter_alpha', '_outer_alpha']):
-
-                g1_result = []
-                g2_result = []
-                m_result = []
-                subfolder = os.path.join(root, foldername)
-                splength = len(run_simulation(subfolder))
-                if splength > 0:
-                    sim_to_run = math.ceil(repeats / splength)
-                    for i in range(sim_to_run):
-                        results = go_through_folder(subfolder)
-                        for i in range(len(results[0])):
-                            g1_result.append(results[0][i])
-                            g2_result.append(results[1][i])
-                            m_result.append(results[2][i])
-                else:
-                    print(splength)
-                g1_rate = np.mean(g1_result)
-                g1_std = np.std(g1_result)
-                g2_rate = np.mean(g2_result)
-                g2_std = np.std(g2_result)
-                m_rate = np.mean(m_result)
-                m_std = np.std(m_result)
+                folder_path = os.path.join(root, foldername)
+                rate, var, std_dev = calculate_statistics(repeats, folder_path)
+                folder_rate.append(rate)
+                folder_variance.append(var)
+                folder_deviation.append(std_dev)
                 
-                folder_path = subfolder
+                
                 folder_dose = []
                 for froot, fsubfolders, ffiles in os.walk(folder_path):
-                    for file in ffiles:
-                        if file.endswith('.txt'):
-                            file_path = os.path.join(folder_path, file)
-                            #print(file_path)
-                            header, events = sddparser.parseSDDFile(file_path)
-                            folder_dose.append(header['Dose or Fluence'][1])
+                        for file in ffiles:
+                            if file.endswith('.txt'):
+                                file_path = os.path.join(folder_path, file)
+                                #print(file_path)
+                                header, events = sddparser.parseSDDFile(file_path)
+                                folder_dose.append(header['Dose or Fluence'][1])
                 if len(folder_dose) > 0 and all_equal(folder_dose):
                     dose = folder_dose[0]
                 elif len(folder_dose) > 0 and not all_equal(folder_dose):
                     dose = np.mean(folder_dose)
-                    
-                print([g1_rate, g1_std, dose, subfolder], flush = True)
+                    print('note that the folder contains files of different doses')
+                else:
+                    print('there are no files in this folder!')
+                print([rate, std_dev, dose, folder_path])
 
 
-'''
-result = statistics(repeats, path)
-#result = [[0.10279999999999999, 0.027461973709112752], [0.1013, 0.02540295258429618], [0.1029, 0.02542813402513051]]
-sys.stdout.flush()
-sys.stdout = sys.__stdout__
-print(result)
 
-
-def linq1(x):
-    a = 2.01 
-    b = 0.011
-    return np.exp(-a*x-b*x*x)
-
-def linq2(x):
-    a = 0.5
-    b = 0.064
-    return np.exp(-a*x-b*x*x)
-
-
-plt.figure()
-xax = np.linspace(0, 4)
-plt.yscale("log")
-plt.plot(xax, linq1(xax), label = "chaudhary14, AG01522 cells")
-plt.plot(xax, linq2(xax), label = "chaudhary14, U-87 cells")
-plt.errorbar(0.094, result[0][0],yerr = result[0][1], fmt='r.', label = "this work")
-plt.legend()
-plt.title("Model Survival Rate In Comparison To PIDE Data")
-plt.xlabel("Dose (Gy)")
-plt.ylabel("Survival Rate")
-plt.show()'''
