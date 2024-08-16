@@ -1,0 +1,3 @@
+ [0.9787090558766859, 0.0014435248463969034, 0.5, 'C:\\Users\\zhenlun\\Desktop\\0_5Gyphoton\\SDDs']
+ [0.9006477329347284, 0.002991344080748026, 1.5, 'C:\\Users\\zhenlun\\Desktop\\1_5Gyphoton\\SDDs']
+ [0.7235845295055822, 0.004472247289291676, 3.0, 'C:\\Users\\zhenlun\\Desktop\\3_0Gyphoton\\SDDs']

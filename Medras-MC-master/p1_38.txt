@@ -1,0 +1,4 @@
+[0.7405, 0.004383602970160504, 0.25, 'C:\\Users\\zhenlun\\Desktop\\medras actual new\\my proton\\proton 0_25gy']
+[0.4632, 0.00498643921049881, 0.5, 'C:\\Users\\zhenlun\\Desktop\\medras actual new\\my proton\\proton 0_5gy']
+[0.4193, 0.004934445358903065, 1.0, 'C:\\Users\\zhenlun\\Desktop\\medras actual new\\my proton\\proton 1gy']
+[0.319, 0.00466089047286031, 2.0, 'C:\\Users\\zhenlun\\Desktop\\medras actual new\\my proton\\proton 2gy']

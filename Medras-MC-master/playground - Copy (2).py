@@ -37,22 +37,20 @@
 #
 # ############################################################################
 
+
 import matplotlib.pyplot as plt
 %matplotlib inline
 import seaborn as sns
 
+import os
 import numpy as np
 import scipy as sp
 import math
 from scipy.integrate import odeint
 from scipy.stats import poisson
-from scipy.stats import norm
-from scipy.stats import lognorm
-
-import os
 import sys
-import io
-from contextlib import redirect_stdout
+
+
 
 from repairanalysis import medrasrepair
 from repairanalysis import sddparser
@@ -114,7 +112,7 @@ summary field:
 individual break set field:
     0 is break set (index that starts at 0)
     1 is number of breaks
-    2 is residual (number of DSB that remains)
+    2 is residual (??? guess is number of DSB that remains)
     3 is number of misrepairs (include large misrepairs?)
     4 is number of large misrepairs (larger than 3 MBP)
     5 is inter-chromosome misrepairs
@@ -156,26 +154,22 @@ LET_value = 0
 dose_value = 2
 particle = 2112 #PDG code
 
-
+currentstdout = sys.__stdout__
 
 def run_simulation(sddp):
-    # Create an in-memory text stream
-    memory_file = io.StringIO()
+    #print('\n\nMisrepair spectrum analysis')
     
-    # Redirect stdout to the in-memory stream
-    with redirect_stdout(memory_file):
-        medrasrepair.repairSimulation(sddp, 'Spectrum')
+    sys.stdout = open("medras_spectrum_analysis.output", 'w')
+    medrasrepair.repairSimulation(sddp,'Spectrum')
+    sys.stdout.flush()
+    sys.stdout = sys.__stdout__
     
-    # Reset the stream position to the beginning
-    memory_file.seek(0)
-    
-    # Read the data from the in-memory stream
-    repair_data = [line.split() for line in memory_file if line[0].isdigit()]
-    
-    # Close the in-memory stream
-    memory_file.close()
+    with open("medras_spectrum_analysis.output", 'r') as spectrum_file:
+        repair_data = [line.split() for line in spectrum_file if line[0].isdigit()]
     
     return repair_data
+
+
 
 def g1_survival(aber, prebreak, postbreak):
     """
@@ -281,15 +275,13 @@ def all_equal(iterable):
     
 if __name__ == "__main__":
     sddpath = os.getcwd()
-    repeats = 1000
-    #folder_suffix = ['_inner_electron', '_inter_electron', '_outer_electron', 
-    #                         '_inner_proton', '_inter_proton', '_outer_proton', 
-    #                         '_inner_alpha', '_inter_alpha', '_outer_alpha']
-    folder_suffix = ['_inner_proton']
+    repeats = 10000
     
     for root, subfolders, files in os.walk(sddpath):
         for foldername in subfolders:
-            if any(sub in foldername for sub in folder_suffix):
+            if any(sub in foldername for sub in ['_inner_electron', '_inter_electron', '_outer_electron', 
+                                     '_inner_proton', '_inter_proton', '_outer_proton', 
+                                     '_inner_alpha', '_inter_alpha', '_outer_alpha']):
 
                 g1_result = []
                 g2_result = []
@@ -307,22 +299,11 @@ if __name__ == "__main__":
                 else:
                     print(splength)
                 g1_rate = np.mean(g1_result)
-                g1_log_result = np.log(g1_result)
-                miu = np.mean(g1_log_result)
-                sigma = np.std(g1_log_result)
-                
-                g1_log_std_dev = np.std(g1_log_result)
-                log_sem = sp.stats.sem(g1_log_result)
-                
-                
-                
-                #g1_sem = np.std(g1_result) / np.sqrt(sim_to_run)
-                #g1_log_sem = np.std(np.log(g1_result)) / np.sqrt(sim_to_run)
-                #g1_exp_sem = np.exp(g1_log_sem)
+                g1_std = np.std(g1_result)
                 g2_rate = np.mean(g2_result)
-                g2_sem = np.std(g2_result) / np.sqrt(sim_to_run)
+                g2_std = np.std(g2_result)
                 m_rate = np.mean(m_result)
-                m_sem = np.std(m_result) / np.sqrt(sim_to_run)
+                m_std = np.std(m_result)
                 
                 folder_path = subfolder
                 folder_dose = []
@@ -338,21 +319,8 @@ if __name__ == "__main__":
                 elif len(folder_dose) > 0 and not all_equal(folder_dose):
                     dose = np.mean(folder_dose)
                     
-                #print([g1_rate, g1_exp_sem, dose, subfolder], flush = True)
-                print([g1_rate, log_sem, dose, subfolder], flush = True)
-                
-                plt.figure()
-                sns.histplot(g1_result, bins = 8, log_scale = True, stat = 'density')
-                
-                x = np.linspace(min(g1_result), max(g1_result), 100)
-                log_x = np.log(x - min(x) + 1) / np.log(max(x) - min(x) + 1)
-                
-                scale = np.exp(miu)
-                y = lognorm.pdf(x, s = sigma, scale=scale)
-                
-                plt.semilogx(x, y, label='Log-normal Distribution')
-                
-                plt.show()
+                print([g1_rate, g1_std, dose, subfolder], flush = True)
+
 
 '''
 result = statistics(repeats, path)
