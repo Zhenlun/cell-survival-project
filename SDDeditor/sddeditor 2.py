@@ -26,8 +26,9 @@ def process_data(input_file, output_file):
 # Walk through each subfolder and process all the data files
 for root, dirs, files in os.walk(os.getcwd()):
     for file in files:
-        if file.endswith("_SDDOutput.txt"):
+        if file.startswith("SDDOutput"):
             path = os.path.join(root, file)
             temp_file = os.path.join(root, 'temp.txt')
             process_data(path, temp_file)
             shutil.move(temp_file, path)
+            print(f"Modified file: {path}")

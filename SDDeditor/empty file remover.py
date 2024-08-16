@@ -7,10 +7,12 @@ root_folder = os.getcwd()
 for folder_path, subfolders, files in os.walk(root_folder):
     # Loop through each file in the current directory
     for filename in files:
-        # Check if the file is a .txt file and does not end with '_SDDOutput.txt'
-        if not filename.endswith(".py") and not filename.startswith('SDDOutput'):
+        # Check if the file is a .txt file
+        if filename.endswith('.txt'):
             # Construct full file path
             file_path = os.path.join(folder_path, filename)
-            # Remove the file
-            os.remove(file_path)
-            print(f'Deleted file: {filename}')
+            # Check if the file is empty
+            if os.stat(file_path).st_size == 0:
+                # Remove the file
+                os.remove(file_path)
+                print(f'Deleted empty file: {filename}')

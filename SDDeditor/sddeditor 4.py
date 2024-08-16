@@ -13,11 +13,12 @@ def update_file(file_path):
                     parts[7] = ' 1'  # Replace with 1 (note the space for formatting)
                 line = ','.join(parts)
             file.write(line)
+    print(f"Modified file: {file_path}")
 
 def search_and_update_files(start_path):
     for root, dirs, files in os.walk(start_path):
         for file in files:
-            if file.endswith('SDDOutput.txt'):
+            if file.startswith('SDDOutput'):
                 update_file(os.path.join(root, file))
 
 # Use the directory of the script file as the start directory
