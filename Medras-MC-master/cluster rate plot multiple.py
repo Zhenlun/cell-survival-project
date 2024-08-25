@@ -176,8 +176,8 @@ def process_and_plot_data(file_name, data_list, N, selection):
     
 def plot_combined_lines(data_list, dose, survival_rate, standard_error, dsb_count, aberration_count, aberration_std_error, selection, ax):
     # Unpack the list
-    energy, a_list, b_list, cellline = data_list
-
+    energy, a_list, b_list, cellline, plotparticle = data_list
+        
     # Generate x values for the lines
     x = np.linspace(min(dose), max(dose), 100)
 
@@ -188,21 +188,27 @@ def plot_combined_lines(data_list, dose, survival_rate, standard_error, dsb_coun
 
     # Plot the data points with error bars based on selection
     if 'survival_rate' in selection:
-        ax.errorbar(dose, survival_rate, yerr=standard_error, fmt='o', label=f'{energy} MeV')
+        ax.errorbar(dose, survival_rate, yerr=standard_error, fmt='o', label=f'{energy} MeV {plotparticle}')
         ax.set_yscale("log")
         ax.set_ylim(0.01, 1)
 
     if 'dsb_count' in selection:
-        ax.plot(dose, dsb_count, 's', label=f'{energy} MeV')
-        slope = np.linalg.lstsq(dose[:, np.newaxis], dsb_count, rcond=None)[0]
+        #ax.errorbar(dose, dsb_count, fmt='s', label=f'{energy} MeV {plotparticle}')
+        ax.plot(dose, dsb_count, 's', label=f'{energy} MeV {plotparticle}')
+        slope = np.linalg.lstsq(dose[:, np.newaxis], dsb_count, rcond=None)[0][0]
+        residuals = dsb_count - (slope * dose)
+        SE_slope = np.sqrt(np.sum(residuals**2) / (len(dose) - 1)) / np.sqrt(np.sum(dose**2))
         y_fit = slope * dose
-        ax.plot(dose, y_fit, '--', label=f'fit: slope = {slope[0]:.2f} DSB/Gy')
+        ax.plot(dose, y_fit, '--', label=f'fit: slope = {slope:.2f} ± {SE_slope:.2f} DSB/Gy')
 
     if 'aberration_count' in selection:
-        ax.errorbar(dose, aberration_count, yerr=aberration_std_error, fmt='v', label=f'{energy} MeV')
-        slope = np.linalg.lstsq(dose[:, np.newaxis], aberration_count, rcond=None)[0]
+        #ax.errorbar(dose, aberration_count, yerr=aberration_std_error, fmt='v', label=f'{energy} MeV {plotparticle}')
+        ax.plot(dose, aberration_count, 'v', label=f'{energy} MeV {plotparticle}')
+        slope = np.linalg.lstsq(dose[:, np.newaxis], aberration_count, rcond=None)[0][0]
+        residuals = aberration_count - (slope * dose)
+        SE_slope = np.sqrt(np.sum(residuals**2) / (len(dose) - 1)) / np.sqrt(np.sum(dose**2))
         y_fit = slope * dose
-        ax.plot(dose, y_fit, '--', label=f'fit: slope = {slope[0]:.2f} CA/Gy')
+        ax.plot(dose, y_fit, '--', label=f'fit: slope = {slope:.3f} ± {SE_slope:.3f} CA/Gy')
 
     # Plot a line for each cell line
     if 'survival_rate' in selection:
@@ -238,21 +244,21 @@ e = 1.38
 a = [0.53, 0.67]
 b = [0.084, 0.037]
 cellline = ["HeLa", "HeLaS3"]
-list138 = [e, a, b, cellline]
+list138 = [e, a, b, cellline, particle]
 
 #0.88mev, order is lung normal async HF-19, tongue tumor async SCC-25, peripheral blood normal G0 Lymphocytes
 e = 0.88
 a = [0.52, 0.81, 1.34]
 b = [-0.053, -0.023, -0.467]
 cellline = ["HF-19", "SCC-25", "G0 lymphocytes"]
-list088 = [e, a, b, cellline]
+list088 = [e, a, b, cellline, particle]
 
 #5.04mev, order iso lung normal async HF-19, tongue tumor async SCC-25
 e = 5.04
 a = [0.55, 0.41]
 b = [0.074, 0.092]
 cellline = ["HF-19", "SCC-25"]
-list504 = [e, a, b, cellline]
+list504 = [e, a, b, cellline, particle]
 
 "-------------------------------------------------------------------"
 
@@ -301,6 +307,33 @@ selection = ["dsb_count"]
 process_and_plot_combined_lines(data_file_name, list088, N, selection, ax2)
 process_and_plot_combined_lines(data_file_name, list138, N, selection, ax2)
 process_and_plot_combined_lines(data_file_name, list504, N, selection, ax2)
+
+data_file_name = "felixphoton.txt"
+particle = 'X-ray'
+list025 = [0.25, a, b, cellline, particle]
+selection = ["aberration_count"]
+process_and_plot_combined_lines(data_file_name, list025, N, selection, ax1)
+selection = ["dsb_count"]
+process_and_plot_combined_lines(data_file_name, list025, N, selection, ax2)
+
+
+
+#now for reference
+dose = np.array([0, 0.25, 0.5, 0.75, 1, 2, 3, 3.5])
+aberration_count = np.array([1, 0.0383, 0.0595, 0.0980, 0.1388, 0.3540, 0.6239, 1.0575])
+
+ax1.errorbar(dose, aberration_count, yerr=[0, 0.0125, 0.0174, 0.0240, 0.0245, 0.0410, 0.0519, 0.1089], 
+             fmt='r.', label="in-vitro X-ray")
+
+# Calculate the slope
+slope = np.linalg.lstsq(dose[:, np.newaxis], aberration_count, rcond=None)[0][0]
+residuals = aberration_count - (slope * dose)
+SE_slope = np.sqrt(np.sum(residuals**2) / (len(dose) - 1)) / np.sqrt(np.sum(dose**2))
+y_fit = slope * dose
+
+ax1.plot(dose, y_fit, 'r', label=f'fit: slope = {slope:.2f} ± {SE_slope:.2f} CA/Gy')
+
+
 
 # Add labels and titles
 ax1.set_xlabel('Dose (Gy)', fontsize = 16)
